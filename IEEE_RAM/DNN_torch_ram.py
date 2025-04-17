@@ -51,17 +51,39 @@ class Network(nn.Module):
 
       
 class LSTMNetwork(nn.Module):  
-    def __init__(self, n_input=4, n_layer_1=256, num_layers=2, n_output=2) -> None:
+    def __init__(self, 
+                 n_input=4, n_layer_1=256, num_layers=2, n_output=2, 
+                 kp=50.0, kd=1.0, 
+        ) -> None:
         super(LSTMNetwork,self).__init__()   
         
         self.p_lstm1 = nn.LSTM(n_input, n_layer_1, num_layers, batch_first=True)   # for LSTM network
         self.p_fc3 = nn.Linear(n_layer_1, n_output)   # for LSTM network, originally was num_h2
-    
-    def forward(self,x):
+        
+        self.qTd_L = 10
+        self.qTd_R = 10
+        self.dqTd_L = 0
+        self.dqTd_R = 0   
+        
+        self.qHr_L = 0.0 
+        self.qHr_R = 0.0 
+        
+        self.kp     = kp 
+        self.kd     = kd   
+        
+        self.b = np.array([0.06745527, 0.13491055, 0.06745527])   
+        self.a = np.array([ 1.,       -1.1429805,  0.4128016])    
+        
+        self.left_vel_filter  = LPF(a=self.a, b=self.b)       
+        self.right_vel_filter = LPF(a=self.a, b=self.b)       
+        self.left_ref_filter  = LPF(a=self.a, b=self.b)       
+        self.right_ref_filter = LPF(a=self.a, b=self.b)      
+        
+    def forward(self,x):   
         # x_feature = torch.relu(self.p_lstm1(x))
         # x_output = torch.relu(self.p_fc3(x_feature))
-        # x_output = self.p_fc3(x_output)   
-        p_out, _ = self.p_lstm1(x)  
+        # x_output = self.p_fc3(x_output)     
+        p_out, _ = self.p_lstm1(x)    
         if p_out.dim() == 2:
             p_out = p_out.unsqueeze(1)
 
@@ -71,12 +93,31 @@ class LSTMNetwork(nn.Module):
         return p_out.detach().numpy().squeeze()    
     
     def get_predicted_action(self, L_IMU_angle, R_IMU_angle, L_IMU_Vel, R_IMU_Vel): 
-        state = np.array([L_IMU_angle*np.pi/180, R_IMU_angle*np.pi/180, L_IMU_Vel*np.pi/180, R_IMU_Vel*np.pi/180])   
+        state = np.array([L_IMU_angle, R_IMU_angle, L_IMU_Vel, R_IMU_Vel])   
         
         state_tensor = torch.tensor(state[np.newaxis, :], dtype=torch.float32)  
         action = self.forward(state_tensor)  
         # print("action :", action)  
         return action[0], action[1]  
+    
+    def generate_assistance(self, L_IMU_angle, R_IMU_angle, L_IMU_Vel, R_IMU_Vel):
+        self.qTd_L = L_IMU_angle * np.pi/180.0     
+        self.qTd_R = R_IMU_angle * np.pi/180.0     
+        self.dqTd_L = L_IMU_Vel * np.pi/180.0             
+        self.dqTd_R = R_IMU_Vel * np.pi/180.0  
+        
+        self.dqTd_filtered_L = self.left_vel_filter.cal_scalar(input_scalar=self.dqTd_L)   
+        self.dqTd_filtered_R = self.right_vel_filter.cal_scalar(input_scalar=self.dqTd_R)    
+        
+        action = self.get_predicted_action(self.qTd_L, self.qTd_R, self.dqTd_filtered_L, self.dqTd_filtered_R)  
+        
+        self.qHr_L = self.left_ref_filter.cal_scalar(input_scalar=action[0])     
+        self.qHr_R = self.right_ref_filter.cal_scalar(input_scalar=action[1])        
+        
+        self.hip_torque_L = (self.qHr_L * self.kp + self.dqTd_filtered_L * self.kd * (-1.0))
+        self.hip_torque_R = (self.qHr_R * self.kp + self.dqTd_filtered_R * self.kd * (-1.0))
+        
+        return self.hip_torque_L, self.hip_torque_R  
         
     def load_saved_policy(self,state_dict):  
         self.p_lstm1.weight_ih_l0.data = state_dict['p_lstm1.weight_ih_l0']    
@@ -96,12 +137,12 @@ class LSTMNetwork(nn.Module):
         
 
 class DNNRam:  
-    def __init__(self, n_input, n_layer_1, n_layer_2, n_output, saved_policy_path) -> None:
+    def __init__(self, n_input, n_layer_1, n_layer_2, n_output, saved_policy_path, kp, kd) -> None:
         
         self.n_input = n_input   
         self.n_layer_1 = n_layer_1        
         self.n_layer_2 = n_layer_2      
-        self.n_output = n_output     
+        self.n_output = n_output      
         
         self.saved_policy_path = saved_policy_path
         self.network = Network(self.n_input, self.n_layer_1, self.n_layer_2, self.n_output)     
@@ -117,17 +158,23 @@ class DNNRam:
         self.b = np.array([0.06745527, 0.13491055, 0.06745527])   
         self.a = np.array([ 1.,       -1.1429805,  0.4128016])    
         
-        self.x_L = np.zeros(3)
-        self.y_L = np.zeros(3)
-        self.x_R = np.zeros(3)
-        self.y_R = np.zeros(3)   
+        self.left_vel_filter  = LPF(a=self.a, b=self.b)       
+        self.right_vel_filter = LPF(a=self.a, b=self.b)      
+        
+        self.left_ref_filter  = LPF(a=self.a, b=self.b)       
+        self.right_ref_filter = LPF(a=self.a, b=self.b)      
+        
+        # self.x_L = np.zeros(3)
+        # self.y_L = np.zeros(3)
+        # self.x_R = np.zeros(3)
+        # self.y_R = np.zeros(3)   
 
-        self.in_2 = np.ones(4)
         self.in_1 = np.ones(4)
+        self.in_2 = np.ones(4)  
         self.out_3 = np.ones(2)
         self.out_2 = np.ones(2)
         self.out_1 = np.ones(2)  
-        self.input_data = np.zeros(self.n_input)   
+        self.input_data = np.zeros(self.n_input)     
         
         self.qTd_L = 10
         self.qTd_R = 10
@@ -141,10 +188,10 @@ class DNNRam:
         self.qHr_L = 0 
         self.qHr_R = 0   
 
-        self.kd2 = 14.142
-        self.kp2 = 50.0
-        self.kp3 = 50.0
-        self.kd3 = 14.142
+        self.kp2 = kp 
+        self.kp3 = kp  
+        self.kd2 = kd    
+        self.kd3 = kd   
 
         self.dqTd_history_L = np.zeros(3)
         self.dqTd_filtered_history_L = np.zeros(3)
@@ -161,21 +208,31 @@ class DNNRam:
         self.LTAVx = 0
         self.RTAVx = 0  
     
-    def generate_assistance(self, LTx, RTx, LTAVx, RTAVx, kp, kd):
-        self.LTx = LTx
-        self.RTx = RTx
-        self.LTAVx = LTAVx
-        self.RTAVx = RTAVx  
-
-        self.kp2 = kp
-        self.kp3 = kp
-        self.kd2 = kd  
-        self.kd3 = kd
-  
+    def generate_assistance(self, LTx, RTx, LTAVx, RTAVx):  
         self.qTd_L = LTx * np.pi/180.0     
         self.qTd_R = RTx * np.pi/180.0     
         self.dqTd_L = LTAVx * np.pi/180.0             
-        self.dqTd_R = RTAVx * np.pi/180.0         
+        self.dqTd_R = RTAVx * np.pi/180.0        
+        # self.LTx = LTx
+        # self.RTx = RTx
+        # self.LTAVx = LTAVx
+        # self.RTAVx = RTAVx     
+        ###############################################
+        # # filter dqTd_L
+        # self.dqTd_history_L[1:3] = self.dqTd_history_L[0:2]
+        # self.dqTd_history_L[0] = self.LTAVx
+        # self.dqTd_filtered_history_L[1:3] = self.dqTd_filtered_history_L[0:2]
+        # self.dqTd_filtered_history_L[0] = np.sum(np.dot(self.dqTd_history_L, self.b)) - np.sum(np.dot(self.dqTd_filtered_history_L[2:0:-1], self.a[2:0:-1]))
+        # self.dqTd_filtered_L = self.dqTd_filtered_history_L[0]  
+        # # filter dqTd_R   
+        # self.dqTd_history_R[1:3] = self.dqTd_history_R[0:2]
+        # self.dqTd_history_R[0] = self.RTAVx
+        # self.dqTd_filtered_history_R[1:3] = self.dqTd_filtered_history_R[0:2]
+        # self.dqTd_filtered_history_R[0] = np.sum(np.dot(self.dqTd_history_R, self.b)) - np.sum(np.dot(self.dqTd_filtered_history_R[2:0:-1], self.a[2:0:-1]))
+        # self.dqTd_filtered_R = self.dqTd_filtered_history_R[0]    
+        
+        self.dqTd_filtered_L = self.left_vel_filter.cal_scalar(input_scalar=self.dqTd_L)   
+        self.dqTd_filtered_R = self.right_vel_filter.cal_scalar(input_scalar=self.dqTd_R)     
 
         self.input_data = np.concatenate((self.in_2, self.in_1, self.qTd_L, self.qTd_R, self.dqTd_L, self.dqTd_R, self.out_3, self.out_2, self.out_1), axis=None)
         self.in_2 = np.copy(self.in_1)
@@ -183,47 +240,36 @@ class DNNRam:
         self.out_3 = np.copy(self.out_2)   
         self.out_2 = np.copy(self.out_1)     
 
-        self.para_first[:]  = 0  
-        self.para_second[:] = 0   
-        self.para_third[:]  = 0  
+        # self.para_first[:]  = 0  
+        # self.para_second[:] = 0   
+        # self.para_third[:]  = 0  
         
         input_data_tensor = torch.tensor(self.input_data, dtype=torch.float32)
-        output_tensor = self.network(input_data_tensor)
-        output_data = output_tensor.detach().numpy()
+        output_tensor = self.network(input_data_tensor)   
+        output_data = output_tensor.detach().numpy()   
         
-        self.qHr_L, self.qHr_R = output_data
+        self.qHr_L, self.qHr_R = output_data  
         self.qHr_L_ori, self.qHr_R_ori = output_data
+        
+        self.qHr_L = self.left_ref_filter.cal_scalar(input_scalar=self.qHr_L_ori)    
+        self.qHr_R = self.right_ref_filter.cal_scalar(input_scalar=self.qHr_R_ori)    
         self.out_1 = np.array([self.qHr_L, self.qHr_R])   
         
-        self.x_L[1:3] = self.x_L[0:2]
-        self.x_L[0] = self.qHr_L
-        self.y_L[1:3] = self.y_L[0:2]
-        self.y_L[0] = np.sum(np.dot(self.x_L, self.b)) - np.sum(np.dot(self.y_L[2:0:-1], self.a[2:0:-1]))
-        self.qHr_L = self.y_L[0] * 0.1   
+        # self.x_L[1:3] = self.x_L[0:2]
+        # self.x_L[0] = self.qHr_L
+        # self.y_L[1:3] = self.y_L[0:2]
+        # self.y_L[0] = np.sum(np.dot(self.x_L, self.b)) - np.sum(np.dot(self.y_L[2:0:-1], self.a[2:0:-1]))
+        # self.qHr_L = self.y_L[0] * 0.1   
 
-        self.x_R[1:3] = self.x_R[0:2]  
-        self.x_R[0] = self.qHr_R  
-        self.y_R[1:3] = self.y_R[0:2]  
-        self.y_R[0] = np.sum(np.dot(self.x_R, self.b)) - np.sum(np.dot(self.y_R[2:0:-1], self.a[2:0:-1]))
-        self.qHr_R = self.y_R[0] * 0.1    
-
-        # filter dqTd_L
-        self.dqTd_history_L[1:3] = self.dqTd_history_L[0:2]
-        self.dqTd_history_L[0] = self.LTAVx
-        self.dqTd_filtered_history_L[1:3] = self.dqTd_filtered_history_L[0:2]
-        self.dqTd_filtered_history_L[0] = np.sum(np.dot(self.dqTd_history_L, self.b)) - np.sum(np.dot(self.dqTd_filtered_history_L[2:0:-1], self.a[2:0:-1]))
-        self.dqTd_filtered_L = self.dqTd_filtered_history_L[0]  
-        
-        # filter dqTd_R
-        self.dqTd_history_R[1:3] = self.dqTd_history_R[0:2]
-        self.dqTd_history_R[0] = self.RTAVx
-        self.dqTd_filtered_history_R[1:3] = self.dqTd_filtered_history_R[0:2]
-        self.dqTd_filtered_history_R[0] = np.sum(np.dot(self.dqTd_history_R, self.b)) - np.sum(np.dot(self.dqTd_filtered_history_R[2:0:-1], self.a[2:0:-1]))
-        self.dqTd_filtered_R = self.dqTd_filtered_history_R[0]
+        # self.x_R[1:3] = self.x_R[0:2]  
+        # self.x_R[0] = self.qHr_R  
+        # self.y_R[1:3] = self.y_R[0:2]  
+        # self.y_R[0] = np.sum(np.dot(self.x_R, self.b)) - np.sum(np.dot(self.y_R[2:0:-1], self.a[2:0:-1]))
+        # self.qHr_R = self.y_R[0] * 0.1    
         
         # hip torque  
-        self.hip_torque_L = (self.qHr_L * self.kp2 + self.dqTd_filtered_L * self.kd2 * (-1.0)) * 0.008
-        self.hip_torque_R = (self.qHr_R * self.kp3 + self.dqTd_filtered_R * self.kd3 * (-1.0)) * 0.008
+        self.hip_torque_L = (self.qHr_L * self.kp2 + self.dqTd_filtered_L * self.kd2 * (-1.0))
+        self.hip_torque_R = (self.qHr_R * self.kp3 + self.dqTd_filtered_R * self.kd3 * (-1.0))
 
         #self.hip_torque_L = ((self.qHr_L-self.qTd_L) * self.kp2 + self.dqTd_L * self.kd2 * (-1.0)) * 0.008
         #self.hip_torque_R = ((self.qHr_R-self.qTd_R) * self.kp3 + self.dqTd_R * self.kd3 * (-1.0)) * 0.008
