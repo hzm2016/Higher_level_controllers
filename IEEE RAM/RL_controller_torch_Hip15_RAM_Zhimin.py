@@ -1,0 +1,108 @@
+import ReadIMU as ReadIMU 
+import time  
+from DNN_torch import DNN  
+import datetime  
+import numpy as np   
+import csv                          
+
+
+ComPort = '/dev/serial0'     
+imu = ReadIMU.READIMU(ComPort)      
+
+start = time.time()   
+
+
+dnn = DNN(18, 128, 64, 2)  # depends on training network 
+now = 0  
+t_pr1 = 0   
+t_pr2 = 0   
+t_pr3 = 0   
+pk = 0   
+counter = 0     
+L_Cmd = 0   
+R_Cmd = 0   
+
+L_Ctl = 1  
+R_Ctl = 1   
+Cmd_scale = 20.0  
+
+kp = 10   
+kd = 400    
+
+# command: 1.5 for running, 2 for climbing  
+kcontrol = 1.0         
+output = np.array([])    
+
+date = time.localtime(time.time())  
+date_year = date.tm_year  
+date_month = date.tm_mon  
+date_day = date.tm_mday  
+date_hour = date.tm_hour  
+date_minute = date.tm_min  
+date_second = date.tm_sec   
+
+root_path = "../data/Ours/With_IMU/Lily/s0x75"  # "s1x25, s1x75, sx20"
+# Create filename with format {Year}{Month}{Day}-{Hour}{Minute}{Second}.csv
+csv_filename = root_path + f"{date_year:04}{date_month:02}{date_day:02}-{date_hour:02}{date_minute:02}{date_second:02}.csv"
+
+
+with open(csv_filename, 'a', newline='') as csvfile: 
+    fieldnames = ['L_IMU_Ang', 'R_IMU_Ang', 'L_IMU_Vel', 'R_IMU_Vel', 'L_Cmd', 'R_Cmd', 'Peak', 'Time']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames) 
+
+    # Write the header only if the file is empty
+    csvfile.seek(0, 2)   
+    if csvfile.tell() == 0:    
+        writer.writeheader()    
+
+    while True:
+        now = (time.time() - start)  
+        
+        imu.read()    
+        imu.decode()    
+        print("count :", counter)      
+
+        counter = counter + 1 
+        
+        L_IMU_angle = imu.XIMUL 
+        R_IMU_angle = imu.XIMUR 
+        L_IMU_vel = imu.XVIMUL 
+        R_IMU_vel = imu.XVIMUR 
+        
+        t_pr1 = now 
+        
+        print(f"Time when running NN = {now:^8.3f}")  
+        dnn.generate_assistance(L_IMU_angle, R_IMU_angle, L_IMU_vel, R_IMU_vel, kp, kd)  
+
+        L_Cmd = L_Ctl * dnn.hip_torque_L * kcontrol
+        R_Cmd = R_Ctl * dnn.hip_torque_R * kcontrol   
+
+        if (L_Cmd > pk or R_Cmd > pk):
+            if (R_Cmd > L_Cmd):
+                pk = R_Cmd
+            if (L_Cmd > R_Cmd):
+                pk = L_Cmd   
+
+        B1_int16 = int(imu.ToUint(L_Cmd/Cmd_scale, -20, 20, 16))    
+        B2_int16 = int(imu.ToUint(R_Cmd/Cmd_scale, -20, 20, 16))     
+
+        b1 = (B1_int16 >> 8 & 0x00ff)
+        b2 = (B1_int16 & 0x00FF)  
+        b3 = (B2_int16 >> 8 & 0x00ff)  
+        b4 = (B2_int16 & 0x00FF) 
+
+        imu.send(b1, b2, b3, b4)   
+
+        data = {
+            'L_IMU_Ang': L_IMU_angle,
+            'R_IMU_Ang': R_IMU_angle,
+            'L_IMU_Vel': L_IMU_vel,
+            'R_IMU_Vel': R_IMU_vel,
+            'L_Cmd': L_Cmd/Cmd_scale,  
+            'R_Cmd': R_Cmd/Cmd_scale,  
+            'Peak': pk,
+            'Time': now
+        }   
+        writer.writerow(data) 
+        csvfile.flush()  # Ensure data is written to file   
+        print(f"| now: {now:^8.3f} | L_IMU_Ang: {L_IMU_angle:^8.3f} | R_IMU_Ang: {R_IMU_angle:^8.3f} | L_IMU_Vel: {L_IMU_vel:^8.3f} | R_IMU_Vel: {R_IMU_vel:^8.3f} | L_Cmd: {L_Cmd/Cmd_scale:^8.3f} | R_Cmd: {R_Cmd/Cmd_scale:^8.3f} | Peak: {pk/Cmd_scale:^8.3f} |")
