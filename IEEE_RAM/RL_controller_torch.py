@@ -1,9 +1,25 @@
 import ReadIMU as ReadIMU 
 import time  
-from DNN_torch import DNN  
+# from DNN_torch import DNN  
+from DNN_torch_ram import DNNRam, LSTMNetwork  
+import torch 
 import datetime  
 import numpy as np   
 import csv                          
+
+
+def load_nn(
+        saved_policy_path = "./nn_para/lstm/99_exo.pt",  
+        # # saved_policy_path = "nn_zhimin_20241216_hipv12/86.pt"   
+        nn_type='nn'  
+    ):   
+    hip_nn = None  
+    if nn_type == 'lstm':   
+        hip_nn = LSTMNetwork(n_input=4, n_layer_1=256, num_layers=2, n_output=2)      
+        hip_nn.load_saved_policy(torch.load(saved_policy_path, map_location=torch.device('cpu')))     
+    else: 
+        hip_nn = DNNRam(18, 128, 64, 2, saved_policy_path=saved_policy_path)   
+    return hip_nn    
 
 
 ComPort = '/dev/serial0'     
@@ -11,8 +27,15 @@ imu = ReadIMU.READIMU(ComPort)
 
 start = time.time()   
 
+# dnn = DNN(18, 128, 64, 2)  # depends on training network 
 
-dnn = DNN(18, 128, 64, 2)  # depends on training network 
+dnn = load_nn(
+    saved_policy_path = "./nn_para/lstm/current_exo.pt",  
+    nn_type           = 'lstm'
+    # saved_policy_path = "./nn_para/mlp/current_exo.pt"   
+    # nn_type='nn'  
+) 
+
 now = 0  
 t_pr1 = 0   
 t_pr2 = 0   
@@ -29,7 +52,7 @@ R_Ctl = 1
 Cmd_scale = 1     
 
 kp = 50
-kd = 0.1 * np.sqrt(kp)     
+kd = 0.1 * np.sqrt(kp)       
 
 # command: 1.5 for running, 2 for climbing  
 kcontrol = 1.0         

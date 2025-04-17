@@ -37,9 +37,9 @@ with open(csv_filename, 'a', newline='') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)  
 
     # Write the header only if the file is empty
-    csvfile.seek(0, 2)
-    if csvfile.tell() == 0:
-        writer.writeheader()
+    csvfile.seek(0, 2)  
+    if csvfile.tell() == 0:   
+        writer.writeheader()   
 
     while True:
         now = (time.time() - start)  
