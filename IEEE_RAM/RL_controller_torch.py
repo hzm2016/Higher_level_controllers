@@ -30,10 +30,10 @@ start = time.time()
 # dnn = DNN(18, 128, 64, 2)  # depends on training network 
 
 dnn = load_nn(
-    saved_policy_path = "./nn_para/lstm/current_exo.pt",  
-    nn_type           = 'lstm'
-    # saved_policy_path = "./nn_para/mlp/current_exo.pt"   
-    # nn_type='nn'  
+    # saved_policy_path = "./nn_para/lstm/current_exo.pt",  
+    # nn_type           = 'lstm'
+    saved_policy_path = "./nn_para/mlp/current_exo.pt",   
+    nn_type='nn'  
 ) 
 
 now = 0  
