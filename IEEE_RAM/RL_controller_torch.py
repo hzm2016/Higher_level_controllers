@@ -21,10 +21,12 @@ pk = 0
 counter = 0     
 L_Cmd = 0   
 R_Cmd = 0   
+Cmd_MIN = -15.0 
+Cmd_MAX = 15.0 
 
-L_Ctl = 1  
-R_Ctl = 1   
-Cmd_scale = 20.0  
+L_Ctl = 1   
+R_Ctl = 1     
+Cmd_scale = 1     
 
 kp = 50
 kd = 0.1 * np.sqrt(kp)     
@@ -79,15 +81,18 @@ with open(csv_filename, 'a', newline='') as csvfile:
 
         L_Cmd = L_Ctl * dnn.hip_torque_L * kcontrol
         R_Cmd = R_Ctl * dnn.hip_torque_R * kcontrol   
+        
+        L_Cmd = np.clip(L_Cmd, Cmd_MIN, Cmd_MAX)    
+        R_Cmd = np.clip(R_Cmd, Cmd_MIN, Cmd_MAX)     
+        
+        # if (L_Cmd > pk or R_Cmd > pk):
+        #     if (R_Cmd > L_Cmd):
+        #         pk = R_Cmd
+        #     if (L_Cmd > R_Cmd):
+        #         pk = L_Cmd   
 
-        if (L_Cmd > pk or R_Cmd > pk):
-            if (R_Cmd > L_Cmd):
-                pk = R_Cmd
-            if (L_Cmd > R_Cmd):
-                pk = L_Cmd   
-
-        B1_int16 = int(imu.ToUint(L_Cmd/Cmd_scale, -20, 20, 16))    
-        B2_int16 = int(imu.ToUint(R_Cmd/Cmd_scale, -20, 20, 16))     
+        B1_int16 = int(imu.ToUint(L_Cmd/Cmd_scale, -20, 20, 16))      
+        B2_int16 = int(imu.ToUint(R_Cmd/Cmd_scale, -20, 20, 16))      
 
         b1 = (B1_int16 >> 8 & 0x00ff)
         b2 = (B1_int16 & 0x00FF)  

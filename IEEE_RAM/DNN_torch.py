@@ -53,14 +53,16 @@ class Network(nn.Module):
 
 class DNN:  
     def __init__(self, n_input, n_first, n_second, n_third) -> None:
-        self.n_input = n_input
-        self.n_first = n_first
-        self.n_second = n_second
-        self.n_third = n_third
+        self.n_input = n_input  
+        self.n_first = n_first   
+        self.n_second = n_second     
+        self.n_third = n_third    
+        
         self.b = np.array([0.0730, 0, -0.0730])
         self.a = np.array([1.0000, -1.8486, 0.8541])
         #self.b = np.array([0.0336,    0.0671,    0.0336])
         #self.a = np.array([1.0000,   -1.4190,    0.5533])
+        
         self.x_L = np.zeros(3)
         self.y_L = np.zeros(3)
         self.x_R = np.zeros(3)
@@ -175,7 +177,7 @@ class DNN:
         self.dqTd_history_L[1:3] = self.dqTd_history_L[0:2]
         self.dqTd_history_L[0] = self.LTAVx
         self.dqTd_filtered_history_L[1:3] = self.dqTd_filtered_history_L[0:2]
-        self.dqTd_filtered_history_L[0] = np.sum(np.dot(self.dqTd_history_L, self.b)) - np.sum(np.dot(self.dqTd_filtered_history_L[2:0:-1], self.a[2:0:-1]))
+        self.dqTd_filtered_history_L[0] = np.sum(np.dot(self.dqTd_history_L, self.b)) - np.sum(np.dot(self.dqTd_filtered_history_L[2:0:-1], self.a[2:0:-1]))  
         self.dqTd_filtered_L = self.dqTd_filtered_history_L[0]
         
         # filter dqTd_R
