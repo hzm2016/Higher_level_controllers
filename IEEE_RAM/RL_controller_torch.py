@@ -26,8 +26,8 @@ L_Ctl = 1
 R_Ctl = 1   
 Cmd_scale = 20.0  
 
-kp = 10   
-kd = 400    
+kp = 50
+kd = 0.1 * np.sqrt(kp)     
 
 # command: 1.5 for running, 2 for climbing  
 kcontrol = 1.0         
@@ -41,7 +41,7 @@ date_hour = date.tm_hour
 date_minute = date.tm_min  
 date_second = date.tm_sec   
 
-root_path = "../data/Ours/With_IMU/Lily/s0x75"  # "s1x25, s1x75, sx20"
+root_path = "./data/Jimmy/s0x75-"  # "s1x25, s1x75, sx20"
 # Create filename with format {Year}{Month}{Day}-{Hour}{Minute}{Second}.csv
 csv_filename = root_path + f"{date_year:04}{date_month:02}{date_day:02}-{date_hour:02}{date_minute:02}{date_second:02}.csv"
 
@@ -58,9 +58,12 @@ with open(csv_filename, 'a', newline='') as csvfile:
     while True:
         now = (time.time() - start)  
         
+        if now > 360:   
+            break  
+        
         imu.read()    
         imu.decode()    
-        print("count :", counter)      
+        # print("count :", counter)    
 
         counter = counter + 1 
         
@@ -71,7 +74,7 @@ with open(csv_filename, 'a', newline='') as csvfile:
         
         t_pr1 = now 
         
-        print(f"Time when running NN = {now:^8.3f}")  
+        # print(f"Time when running NN = {now:^8.3f}")  
         dnn.generate_assistance(L_IMU_angle, R_IMU_angle, L_IMU_vel, R_IMU_vel, kp, kd)  
 
         L_Cmd = L_Ctl * dnn.hip_torque_L * kcontrol
@@ -94,14 +97,14 @@ with open(csv_filename, 'a', newline='') as csvfile:
         imu.send(b1, b2, b3, b4)   
 
         data = {
+            'Time': now, 
             'L_IMU_Ang': L_IMU_angle,
             'R_IMU_Ang': R_IMU_angle,
             'L_IMU_Vel': L_IMU_vel,
             'R_IMU_Vel': R_IMU_vel,
             'L_Cmd': L_Cmd/Cmd_scale,  
             'R_Cmd': R_Cmd/Cmd_scale,  
-            'Peak': pk,
-            'Time': now
+            'Peak': pk
         }   
         writer.writerow(data) 
         csvfile.flush()  # Ensure data is written to file   
