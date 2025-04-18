@@ -3,7 +3,32 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import torch
 import torch.nn as nn
 import numpy as np
-# import matplotlib.pyplot as plt
+
+
+def load_nn(
+        saved_policy_path = "current_exo.pt",  
+        nn_type='nn',
+        kp=None, 
+        kd=None, 
+        input_b=np.array([0.02008337, 0.04016673, 0.02008337]), 
+        input_a=np.array([1.,-1.56101808, 0.64135154])  
+    ):  
+    hip_nn = None  
+    if nn_type == 'lstm':   
+        hip_nn = LSTMNetwork(
+            n_input=4, n_layer_1=256, num_layers=2, n_output=2, 
+            kp=kp, kd=kd, 
+            b=input_b, a=input_a
+        )        
+        hip_nn.load_saved_policy(torch.load(saved_policy_path, map_location=torch.device('cpu')))     
+    else: 
+        hip_nn = DNNRam(
+            18, 128, 64, 2, 
+            saved_policy_path=saved_policy_path, 
+            kp=kp, kd=kd, 
+            b=input_b, a=input_a  
+        )     
+    return hip_nn      
 
 
 class LPF(object):
@@ -65,8 +90,7 @@ class DNNRam:
         
         self.saved_policy_path = saved_policy_path
         self.network = Network(self.n_input, self.n_layer_1, self.n_layer_2, self.n_output)     
-        self.network.load_saved_policy(torch.load(self.saved_policy_path, map_location=torch.device('cpu')))
-        # print(f"Loaded policy from {self.saved_policy_path}")   
+        self.network.load_saved_policy(torch.load(self.saved_policy_path, map_location=torch.device('cpu')))  
         
         # self.b = np.array([0.0730, 0, -0.0730])  
         # self.a = np.array([1.0000, -1.8486, 0.8541])  
@@ -74,8 +98,8 @@ class DNNRam:
         # self.a = np.array([1.0000,   -1.4190,    0.5533])     
         # self.b = np.array([0.06745527, 0.13491055, 0.06745527])   
         # self.a = np.array([ 1.,       -1.1429805,  0.4128016])    
-        self.b = b
-        self.a = a
+        self.b = b  
+        self.a = a 
         
         self.left_vel_filter  = LPF(a=self.a, b=self.b)       
         self.right_vel_filter = LPF(a=self.a, b=self.b)      
@@ -87,22 +111,25 @@ class DNNRam:
         # self.y_L = np.zeros(3)
         # self.x_R = np.zeros(3)
         # self.y_R = np.zeros(3)   
+        # self.para_first = np.zeros(self.n_layer_1)
+        # self.para_second = np.zeros(self.n_layer_2)  
+        # self.para_third = np.zeros(self.n_output)    
+        # self.LTx = 0
+        # self.RTx = 0  
+        # self.LTAVx = 0
+        # self.RTAVx = 0  
 
-        self.in_1 = np.ones(4)
-        self.in_2 = np.ones(4)  
-        self.out_3 = np.ones(2)
-        self.out_2 = np.ones(2)
-        self.out_1 = np.ones(2)  
+        self.in_1  = np.ones(4)  
+        self.in_2  = np.ones(4)   
+        self.out_3 = np.ones(2)   
+        self.out_2 = np.ones(2)   
+        self.out_1 = np.ones(2)   
         self.input_data = np.zeros(self.n_input)     
         
         self.qTd_L = 10
         self.qTd_R = 10
         self.dqTd_L = 0
         self.dqTd_R = 0  
-        
-        self.para_first = np.zeros(self.n_layer_1)
-        self.para_second = np.zeros(self.n_layer_2)
-        self.para_third = np.zeros(self.n_output)  
         
         self.qHr_L = 0 
         self.qHr_R = 0   
@@ -112,7 +139,7 @@ class DNNRam:
         self.kd2 = kd    
         self.kd3 = kd   
 
-        self.dqTd_history_L = np.zeros(3)
+        self.dqTd_history_L = np.zeros(3)  
         self.dqTd_filtered_history_L = np.zeros(3)
         self.dqTd_filtered_L = 0
         self.dqTd_history_R = np.zeros(3)
@@ -120,16 +147,11 @@ class DNNRam:
         self.dqTd_filtered_R = 0  
         
         self.hip_torque_L = 0
-        self.hip_torque_R = 0  
-        
-        self.LTx = 0
-        self.RTx = 0
-        self.LTAVx = 0
-        self.RTAVx = 0  
+        self.hip_torque_R = 0    
     
     def generate_assistance(self, LTx, RTx, LTAVx, RTAVx):  
-        self.qTd_L = LTx * np.pi/180.0     
-        self.qTd_R = RTx * np.pi/180.0     
+        self.qTd_L  = LTx * np.pi/180.0     
+        self.qTd_R  = RTx * np.pi/180.0     
         self.dqTd_L = LTAVx * np.pi/180.0             
         self.dqTd_R = RTAVx * np.pi/180.0      
           
@@ -151,25 +173,22 @@ class DNNRam:
         # self.dqTd_filtered_history_R[0] = np.sum(np.dot(self.dqTd_history_R, self.b)) - np.sum(np.dot(self.dqTd_filtered_history_R[2:0:-1], self.a[2:0:-1]))
         # self.dqTd_filtered_R = self.dqTd_filtered_history_R[0]    
         
+        ### velocity ###
         self.dqTd_filtered_L = self.left_vel_filter.cal_scalar(input_scalar=self.dqTd_L)   
         self.dqTd_filtered_R = self.right_vel_filter.cal_scalar(input_scalar=self.dqTd_R)     
 
         self.input_data = np.concatenate((self.in_2, self.in_1, self.qTd_L, self.qTd_R, self.dqTd_filtered_L, self.dqTd_filtered_R, self.out_3, self.out_2, self.out_1), axis=None)
-        self.in_2 = np.copy(self.in_1)
-        self.in_1 = np.array([self.qTd_L, self.qTd_R, self.dqTd_filtered_L, self.dqTd_filtered_R])  
+        self.in_2  = np.copy(self.in_1)
+        self.in_1  = np.array([self.qTd_L, self.qTd_R, self.dqTd_filtered_L, self.dqTd_filtered_R])  
         self.out_3 = np.copy(self.out_2)     
         self.out_2 = np.copy(self.out_1)     
-
-        # self.para_first[:]  = 0  
-        # self.para_second[:] = 0   
-        # self.para_third[:]  = 0  
         
         input_data_tensor = torch.tensor(self.input_data, dtype=torch.float32)
         output_tensor = self.network(input_data_tensor)   
         output_data = output_tensor.detach().numpy()   
         
         self.qHr_L, self.qHr_R = output_data  
-        self.qHr_L_ori, self.qHr_R_ori = output_data
+        self.qHr_L_ori, self.qHr_R_ori = output_data  
         
         self.qHr_L = self.left_ref_filter.cal_scalar(input_scalar=self.qHr_L_ori)    
         self.qHr_R = self.right_ref_filter.cal_scalar(input_scalar=self.qHr_R_ori)    
@@ -277,8 +296,6 @@ class LSTMNetwork(nn.Module):
         self.kp    = kp 
         self.kd    = kd     
         
-        # self.b = np.array([0.06745527, 0.13491055, 0.06745527])   
-        # self.a = np.array([ 1.,       -1.1429805,  0.4128016])    
         self.b     = b 
         self.a     = a 
         
@@ -305,14 +322,13 @@ class LSTMNetwork(nn.Module):
         
         state_tensor = torch.tensor(state[np.newaxis, :], dtype=torch.float32)  
         action = self.forward(state_tensor)  
-        # print("action :", action)  
         return action[0], action[1]  
     
     def generate_assistance(self, L_IMU_angle, R_IMU_angle, L_IMU_Vel, R_IMU_Vel):
-        self.qTd_L = L_IMU_angle * np.pi/180.0      
-        self.qTd_R = R_IMU_angle * np.pi/180.0       
+        self.qTd_L  = L_IMU_angle * np.pi/180.0      
+        self.qTd_R  = R_IMU_angle * np.pi/180.0       
         self.dqTd_L = L_IMU_Vel * np.pi/180.0              
-        self.dqTd_R = R_IMU_Vel * np.pi/180.0      
+        self.dqTd_R = R_IMU_Vel * np.pi/180.0         
         
         self.dqTd_filtered_L = self.left_vel_filter.cal_scalar(input_scalar=self.dqTd_L)   
         self.dqTd_filtered_R = self.right_vel_filter.cal_scalar(input_scalar=self.dqTd_R)    
@@ -322,9 +338,11 @@ class LSTMNetwork(nn.Module):
         self.qHr_L = self.left_ref_filter.cal_scalar(input_scalar=action[0])     
         self.qHr_R = self.right_ref_filter.cal_scalar(input_scalar=action[1])        
         
-        self.hip_torque_L = (self.qHr_L * self.kp + self.dqTd_filtered_L * self.kd * (-1.0))
-        self.hip_torque_R = (self.qHr_R * self.kp + self.dqTd_filtered_R * self.kd * (-1.0))
+        self.hip_torque_L = 0.1 * self.qHr_L * self.kp + self.dqTd_filtered_L * self.kd * (-1.0)   
+        self.hip_torque_R = 0.1 * self.qHr_R * self.kp + self.dqTd_filtered_R * self.kd * (-1.0)    
         
+        # self.hip_torque_L = self.dqTd_filtered_L * self.kd * (-1.0)   
+        # self.hip_torque_R = self.dqTd_filtered_R * self.kd * (-1.0)   
         return self.hip_torque_L, self.hip_torque_R  
         
     def load_saved_policy(self,state_dict):  

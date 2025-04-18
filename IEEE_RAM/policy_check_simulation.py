@@ -315,7 +315,7 @@ if __name__ == "__main__":
 
     # dnn = DNN(18, 128, 64, 2)  # depends on training network  
     dnn = load_nn(
-        saved_policy_path = "./nn_para/lstm/0_exo.pt",  
+        saved_policy_path = "./nn_para/lstm/current_exo.pt",  
         nn_type           = 'lstm', 
         # saved_policy_path = "./nn_para/mlp/30_exo.pt",   
         # nn_type='nn', 
