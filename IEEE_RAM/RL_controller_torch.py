@@ -9,16 +9,17 @@ import csv
 
 
 def load_nn(
-        saved_policy_path = "./nn_para/lstm/99_exo.pt",  
-        # # saved_policy_path = "nn_zhimin_20241216_hipv12/86.pt"   
-        nn_type='nn'  
+        saved_policy_path = "current_exo.pt",  
+        nn_type='nn',
+        kp=None, 
+        kd=None   
     ):   
     hip_nn = None  
     if nn_type == 'lstm':   
-        hip_nn = LSTMNetwork(n_input=4, n_layer_1=256, num_layers=2, n_output=2)      
+        hip_nn = LSTMNetwork(n_input=4, n_layer_1=256, num_layers=2, n_output=2, kp=kp, kd=kd)        
         hip_nn.load_saved_policy(torch.load(saved_policy_path, map_location=torch.device('cpu')))     
     else: 
-        hip_nn = DNNRam(18, 128, 64, 2, saved_policy_path=saved_policy_path)   
+        hip_nn = DNNRam(18, 128, 64, 2, saved_policy_path=saved_policy_path, kp=kp, kd=kd)     
     return hip_nn    
 
 
@@ -27,13 +28,17 @@ imu = ReadIMU.READIMU(ComPort)
 
 start = time.time()   
 
-# dnn = DNN(18, 128, 64, 2)  # depends on training network 
+kp = 50
+kd = 0.1 * np.sqrt(kp)       
 
+# dnn = DNN(18, 128, 64, 2)  # depends on training network  
 dnn = load_nn(
     # saved_policy_path = "./nn_para/lstm/current_exo.pt",  
     # nn_type           = 'lstm'
     saved_policy_path = "./nn_para/mlp/current_exo.pt",   
-    nn_type='nn'  
+    nn_type='nn', 
+    kp = kp, 
+    kd = kd 
 ) 
 
 now = 0  
@@ -50,9 +55,6 @@ Cmd_MAX = 15.0
 L_Ctl = 1   
 R_Ctl = 1     
 Cmd_scale = 1     
-
-kp = 50
-kd = 0.1 * np.sqrt(kp)       
 
 # command: 1.5 for running, 2 for climbing  
 kcontrol = 1.0         
