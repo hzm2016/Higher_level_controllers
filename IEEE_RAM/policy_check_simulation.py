@@ -196,7 +196,8 @@ def load_data(
 
 def forward_calculation(
     data_total=None, 
-    hip_dnn=None   
+    hip_dnn   =None,
+    k_control =0.2  
 ):  
     L_IMU_angle = data_total['L_IMU_angle']   
     R_IMU_angle = data_total['R_IMU_angle']     
@@ -221,36 +222,30 @@ def forward_calculation(
     # kp = 50  
     # kd = 14.14  
     # # print(L_IMU_angle.shape)
-    for i in range(len(L_IMU_angle)): 
+    for i in range(len(L_IMU_angle)):   
     # for i in range(L_IMU_angle.shape[0]):    
         # print(f"Time when running NN = {time_list[i]:^8.3f}")  
-        
         # qHr_L, qHr_R, filter_vel_L, filter_vel_R = nn_model.get_predicted_action(L_IMU_angle[i][0], R_IMU_angle[i][0], L_IMU_vel[i][0], R_IMU_vel[i][0])     
         # print("imu:", L_IMU_angle[i], R_IMU_angle[i]) 
         hip_dnn.generate_assistance(L_IMU_angle[i], R_IMU_angle[i], L_IMU_vel[i], R_IMU_vel[i])      
         
         L_Ref_angle.append(180/np.pi * float(hip_dnn.qHr_L))      
-        R_Ref_angle.append(180/np.pi * float(hip_dnn.qHr_R))    
+        R_Ref_angle.append(180/np.pi * float(hip_dnn.qHr_R))      
         
         L_Ref_velocity.append(180/np.pi * float(hip_dnn.dqTd_filtered_L)) 
         R_Ref_velocity.append(180/np.pi * float(hip_dnn.dqTd_filtered_R))      
         
-        print(hip_dnn.hip_torque_L)
-        L_Cmd_torque.append(hip_dnn.hip_torque_L)   
-        R_Cmd_torque.append(hip_dnn.hip_torque_R)   
+        L_Cmd_torque.append(hip_dnn.hip_torque_L*k_control)    
+        R_Cmd_torque.append(hip_dnn.hip_torque_R*k_control)     
         
-        # L_Ref_angle.append(L_IMU_angle[i])    
-        # R_Ref_angle.append(R_IMU_angle[i])
-        
+        # L_Ref_angle.append(L_IMU_angle[i])     
+        # R_Ref_angle.append(R_IMU_angle[i])   
         # L_Ref_velocity.append(float(filter_vel_L))    
         # R_Ref_velocity.append(float(filter_vel_R))        
-        
         # hip_torque_L = ((hip_dnn.qHr_L - L_IMU_angle[i]* np.pi/180.0) * kp + hip_dnn.dqTd_filtered_L * kd * (-1.0)) * 0.08
         # hip_torque_R = ((hip_dnn.qHr_R - R_IMU_angle[i]* np.pi/180.0) * kp + hip_dnn.dqTd_filtered_L * kd * (-1.0)) * 0.08
-        
         # hip_torque_L = - L_IMU_vel[i] * kd * np.pi/180.0    
         # hip_torque_R = - R_IMU_vel[i] * kd * np.pi/180.0     
-        
         # hip_torque_L = (qHr_L * kp + filter_vel_L * kd * (-1.0)) * 0.008
         # hip_torque_R = (qHr_R * kp + filter_vel_R * kd * (-1.0)) * 0.008
 
@@ -337,7 +332,8 @@ if __name__ == "__main__":
     
     data_plot = forward_calculation(
         data_total=data_total,  
-        hip_dnn=dnn  
+        hip_dnn   =dnn,
+        k_control =0.3  
     )   
     
     plot_evaluated_results(

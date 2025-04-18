@@ -27,7 +27,8 @@ dnn = load_nn(
     kd = kd 
 )   
 
-now = 0  
+now        = 0  
+total_time = 330
 L_Cmd = 0   
 R_Cmd = 0   
 Cmd_MIN = -15.0 
@@ -36,7 +37,7 @@ Cmd_MAX = 15.0
 L_Ctl     = -1.0  
 R_Ctl     = -1.0     
 Cmd_scale = 1     
-kcontrol  = 1.0    # command: 1.5 for running, 2 for climbing  
+kcontrol  = 0.3    # command: 1.5 for running, 2 for climbing  
 
 date = time.localtime(time.time())  
 date_year = date.tm_year  
@@ -63,7 +64,8 @@ with open(csv_filename, 'a', newline='') as csvfile:
     while True:
         now = (time.time() - start)  
         
-        if now > 360:   
+        if now > total_time:  
+            print("All experiment has done !!!")   
             break  
         
         imu.read()   
@@ -73,8 +75,8 @@ with open(csv_filename, 'a', newline='') as csvfile:
         
         L_IMU_angle = imu.XIMUL 
         R_IMU_angle = imu.XIMUR 
-        L_IMU_vel = imu.XVIMUL 
-        R_IMU_vel = imu.XVIMUR 
+        L_IMU_vel   = imu.XVIMUL 
+        R_IMU_vel   = imu.XVIMUR 
         
         t_pr1 = now 
         
@@ -109,9 +111,8 @@ with open(csv_filename, 'a', newline='') as csvfile:
             'L_IMU_Vel': L_IMU_vel,
             'R_IMU_Vel': R_IMU_vel,
             'L_Cmd': L_Cmd/Cmd_scale,  
-            'R_Cmd': R_Cmd/Cmd_scale,  
-            'Peak': pk
+            'R_Cmd': R_Cmd/Cmd_scale  
         }   
         writer.writerow(data) 
         csvfile.flush()  # Ensure data is written to file   
-        print(f"| now: {now:^8.3f} | L_IMU_Ang: {L_IMU_angle:^8.3f} | R_IMU_Ang: {R_IMU_angle:^8.3f} | L_IMU_Vel: {L_IMU_vel:^8.3f} | R_IMU_Vel: {R_IMU_vel:^8.3f} | L_Cmd: {L_Cmd/Cmd_scale:^8.3f} | R_Cmd: {R_Cmd/Cmd_scale:^8.3f} | Peak: {pk/Cmd_scale:^8.3f} |")
+        print(f"| now: {now:^8.3f} | L_IMU_Ang: {L_IMU_angle:^8.3f} | R_IMU_Ang: {R_IMU_angle:^8.3f} | L_IMU_Vel: {L_IMU_vel:^8.3f} | R_IMU_Vel: {R_IMU_vel:^8.3f} | L_Cmd: {L_Cmd/Cmd_scale:^8.3f} | R_Cmd: {R_Cmd/Cmd_scale:^8.3f} |")
