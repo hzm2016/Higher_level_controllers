@@ -19,25 +19,25 @@ kd = 0.5 * np.sqrt(kp)
 
 # dnn = DNN(18, 128, 64, 2)  # depends on training network  
 dnn = load_nn(
-    # saved_policy_path = "./nn_para/lstm/current_exo.pt",  
-    # nn_type           = 'lstm'
-    saved_policy_path = "./nn_para/mlp/current_exo.pt",   
-    nn_type='nn', 
+    saved_policy_path = "./nn_para/lstm/current_exo.pt",  
+    nn_type           = 'lstm',
+    # saved_policy_path = "./nn_para/mlp/current_exo.pt",   
+    # nn_type='nn', 
     kp = kp, 
     kd = kd 
 )   
 
 now        = 0  
-total_time = 330
+total_time = 150
 L_Cmd = 0   
 R_Cmd = 0   
-Cmd_MIN = -15.0 
-Cmd_MAX = 15.0 
+Cmd_MIN = -5.0 
+Cmd_MAX = 5.0 
 
-L_Ctl     = -1.0  
-R_Ctl     = -1.0     
+L_Ctl     = 1.0  
+R_Ctl     = 1.0     
 Cmd_scale = 1     
-kcontrol  = 0.3    # command: 1.5 for running, 2 for climbing  
+kcontrol  = 0.1    # command: 1.5 for running, 2 for climbing  
 
 date = time.localtime(time.time())  
 date_year = date.tm_year  
@@ -47,7 +47,7 @@ date_hour = date.tm_hour
 date_minute = date.tm_min  
 date_second = date.tm_sec   
 
-root_path = "./data/Jimmy/s0x75-"  # "s1x25, s1x75, sx20"
+root_path = "./data/Lily/s1x75-"  # "s1x25, s1x75, sx20"
 # Create filename with format {Year}{Month}{Day}-{Hour}{Minute}{Second}.csv
 csv_filename = root_path + f"{date_year:04}{date_month:02}{date_day:02}-{date_hour:02}{date_minute:02}{date_second:02}.csv"
 
@@ -71,7 +71,7 @@ with open(csv_filename, 'a', newline='') as csvfile:
         imu.read()   
         imu.decode()    
 
-        counter = counter + 1 
+        # counter = counter + 1 
         
         L_IMU_angle = imu.XIMUL 
         R_IMU_angle = imu.XIMUR 

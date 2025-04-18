@@ -338,11 +338,14 @@ class LSTMNetwork(nn.Module):
         self.qHr_L = self.left_ref_filter.cal_scalar(input_scalar=action[0])     
         self.qHr_R = self.right_ref_filter.cal_scalar(input_scalar=action[1])        
         
-        # self.hip_torque_L = 0.1 * self.qHr_L * self.kp + self.dqTd_filtered_L * self.kd * (-1.0)   
-        # self.hip_torque_R = 0.1 * self.qHr_R * self.kp + self.dqTd_filtered_R * self.kd * (-1.0)    
+        self.hip_torque_L = 0.1 * self.qHr_L * self.kp + self.dqTd_filtered_L * self.kd * (-1.0)   
+        self.hip_torque_R = 0.1 * self.qHr_R * self.kp + self.dqTd_filtered_R * self.kd * (-1.0)    
         
-        self.hip_torque_L = self.dqTd_filtered_L * self.kd * (-1.0)   
-        self.hip_torque_R = self.dqTd_filtered_R * self.kd * (-1.0)   
+        # self.hip_torque_L = self.dqTd_filtered_L * self.kd * (-1.0)   
+        # self.hip_torque_R = self.dqTd_filtered_R * self.kd * (-1.0)   
+        
+        self.hip_torque_L = 0.0
+        self.hip_torque_R = 0.0  
         return self.hip_torque_L, self.hip_torque_R  
         
     def load_saved_policy(self,state_dict):  
